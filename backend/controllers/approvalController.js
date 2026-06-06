@@ -70,7 +70,7 @@ exports.approveQuotation = async (req, res) => {
       });
 
       // 3. Close the original RFQ
-      await tx.rFQ.update({
+      await tx.rfq.update({
         where: { id: rfqId },
         data: { status: 'CLOSED' }
       });

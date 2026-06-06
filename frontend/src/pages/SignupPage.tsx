@@ -12,6 +12,13 @@ export function SignupPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState('PROCUREMENT_OFFICER'); // Default role
+
+  // Vendor-specific fields
+  const [companyName, setCompanyName] = useState('');
+  const [category, setCategory] = useState('');
+  const [gstNumber, setGstNumber] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [address, setAddress] = useState('');
   
   // UI State
   const [error, setError] = useState('');
@@ -34,14 +41,25 @@ export function SignupPage() {
 
     setLoading(true);
     try {
+      const payload: any = { 
+        name, 
+        email, 
+        password, 
+        role 
+      };
+
+      // Include vendor-specific fields
+      if (role === 'VENDOR') {
+        payload.companyName = companyName;
+        payload.category = category;
+        payload.gstNumber = gstNumber;
+        payload.contactPhone = contactPhone;
+        payload.address = address;
+      }
+
       await apiFetch('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ 
-          name, 
-          email, 
-          password, 
-          role 
-        }),
+        body: JSON.stringify(payload),
       });
       
       alert('Registration successful! Please login.');
@@ -132,6 +150,69 @@ export function SignupPage() {
             </select>
           </div>
           
+          {/* Vendor-specific fields */}
+          {role === 'VENDOR' && (
+            <div className="space-y-4 border border-zinc-700 rounded-lg p-4 bg-black/20">
+              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor Company Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-400">Company Name *</label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="e.g. ABC Corp"
+                    className="w-full bg-black/50 border border-zinc-700 text-gray-100 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-400">Category</label>
+                  <input
+                    type="text"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="e.g. IT Equipment"
+                    className="w-full bg-black/50 border border-zinc-700 text-gray-100 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-400">GST Number *</label>
+                  <input
+                    type="text"
+                    value={gstNumber}
+                    onChange={(e) => setGstNumber(e.target.value)}
+                    placeholder="e.g. 27AADCB2230M1Z2"
+                    className="w-full bg-black/50 border border-zinc-700 text-gray-100 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-400">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    placeholder="e.g. +91 9876543210"
+                    className="w-full bg-black/50 border border-zinc-700 text-gray-100 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm text-gray-400">Address</label>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  rows={2}
+                  placeholder="Registered business address"
+                  className="w-full bg-black/50 border border-zinc-700 text-gray-100 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors resize-none"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col items-center gap-4 pt-4 border-t border-zinc-800">
             <button 
               type="submit" 

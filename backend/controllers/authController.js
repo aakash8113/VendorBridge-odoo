@@ -35,8 +35,38 @@ exports.register = async (req, res) => {
       role,
     };
 
-    // If the user is a vendor, we can optionally link them to a vendor record
-    if (role === 'VENDOR' && vendorId) {
+    // If the user is a vendor, create a Vendor record and link the user to it
+    if (role === 'VENDOR') {
+      const { companyName, category, gstNumber, contactPhone, address } = req.body;
+
+      if (!companyName || !gstNumber) {
+        return res.status(400).json({ error: 'Vendor registration requires companyName and gstNumber.' });
+      }
+
+      // Check if vendor with this GST already exists
+      const existingVendor = await prisma.vendor.findUnique({
+        where: { gstNumber },
+      });
+
+      if (existingVendor) {
+        return res.status(400).json({ error: 'A vendor with this GST Number is already registered.' });
+      }
+
+      // Create the vendor record
+      const vendor = await prisma.vendor.create({
+        data: {
+          companyName,
+          category: category || '',
+          gstNumber,
+          contactEmail: email,
+          contactPhone: contactPhone || '',
+          address: address || '',
+          status: 'PENDING',
+        },
+      });
+
+      userData.vendorId = vendor.id;
+    } else if (role === 'VENDOR' && vendorId) {
       userData.vendorId = vendorId;
     }
 
