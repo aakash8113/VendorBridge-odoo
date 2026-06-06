@@ -1,0 +1,6 @@
+{
+  "name": "VendorBridge",
+  "description": "Procurement and vendor management portal prototype",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
