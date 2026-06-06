@@ -110,6 +110,7 @@ model Quotation {
   deliveryDays       Int
   paymentTerms       String
   status             QuotationStatus
+  approvalRemarks    String?
   quotationLineItems QuotationLineItem[]
   purchaseOrders     PurchaseOrder[]
 }

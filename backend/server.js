@@ -12,6 +12,7 @@ const poRoutes = require('./routes/poRoutes');
 const documentRoutes = require('./routes/documentRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const logRoutes = require('./routes/logRoutes');
+const invoiceRoutes = require('./routes/invoiceRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const path = require('path');
 
@@ -31,6 +32,7 @@ app.use('/api/pos', poRoutes);
 app.use('/api', documentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/logs', logRoutes);
+app.use('/api/invoices', invoiceRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'VendorBridge API is running' });

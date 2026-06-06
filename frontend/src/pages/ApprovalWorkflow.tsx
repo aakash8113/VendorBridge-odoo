@@ -27,6 +27,8 @@ export function ApprovalWorkflow() {
     fetchPending();
   }, []);
 
+  const [approvalRemarks, setApprovalRemarks] = useState("");
+
   const handleAction = async (action: "approve" | "reject") => {
     if (!selectedQuote) return;
     if (!confirm(`Are you sure you want to ${action} this quotation?`)) return;
@@ -35,6 +37,7 @@ export function ApprovalWorkflow() {
     try {
       await apiFetch(`/quotations/${selectedQuote.id}/${action}`, {
         method: "PUT",
+        body: JSON.stringify({ approvalRemarks }),
       });
       alert(`Quotation ${action}d successfully`);
 
@@ -45,6 +48,7 @@ export function ApprovalWorkflow() {
         const updated = pendingQuotes.filter((q) => q.id !== selectedQuote.id);
         setPendingQuotes(updated);
         setSelectedQuote(updated.length > 0 ? updated[0] : null);
+        setApprovalRemarks("");
       }
     } catch (err: any) {
       alert(err.message || `Failed to ${action} quotation`);
@@ -170,6 +174,8 @@ export function ApprovalWorkflow() {
                   </h3>
                   <textarea
                     rows={4}
+                    value={approvalRemarks}
+                    onChange={(e) => setApprovalRemarks(e.target.value)}
                     placeholder="Add your comments or conditions (Optional)...."
                     className="w-full bg-black/50 border border-zinc-700 text-gray-100 rounded-lg px-4 py-3 outline-none focus:border-blue-500 resize-none text-sm placeholder:text-zinc-600"
                   ></textarea>

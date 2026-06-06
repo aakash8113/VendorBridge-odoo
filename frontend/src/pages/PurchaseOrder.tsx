@@ -1,26 +1,73 @@
 import { Download, Printer, Mail, Inbox } from "lucide-react";
 import { useState, useEffect } from "react";
-import { apiFetch } from "../lib/api";
+import { apiFetch, downloadInvoicePdf, sendInvoiceEmail, generateInvoice } from "../lib/api";
 
 export function PurchaseOrder() {
   const [pos, setPos] = useState<any[]>([]);
   const [selectedPo, setSelectedPo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<any[]>([]);
 
   useEffect(() => {
-    async function fetchPOs() {
+    async function fetchData() {
       try {
-        const data = await apiFetch("/pos");
-        setPos(data);
-        if (data.length > 0) setSelectedPo(data[0]);
+        const poData = await apiFetch("/pos");
+        setPos(poData);
+        if (poData.length > 0) setSelectedPo(poData[0]);
+
+        try {
+          const invData = await apiFetch("/invoices");
+          setInvoices(invData);
+        } catch(e) { /* invoices might not exist */ }
       } catch (err) {
         console.error("Failed to load POs", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchPOs();
+    fetchData();
   }, []);
+
+  const getInvoiceForPo = (poId: string) => {
+    return invoices.find(inv => inv.poId === poId || inv.purchaseOrder?.poNumber === selectedPo?.poNumber);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!selectedPo) return;
+    setActionLoading('pdf');
+    try {
+      // First try to find existing invoice, or generate one
+      let invoice = getInvoiceForPo(selectedPo.id);
+      if (!invoice) {
+        invoice = await generateInvoice(selectedPo.id);
+        setInvoices(prev => [...prev, invoice]);
+      }
+      await downloadInvoicePdf(invoice.id);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download PDF');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEmailInvoice = async () => {
+    if (!selectedPo) return;
+    setActionLoading('email');
+    try {
+      let invoice = getInvoiceForPo(selectedPo.id);
+      if (!invoice) {
+        invoice = await generateInvoice(selectedPo.id);
+        setInvoices(prev => [...prev, invoice]);
+      }
+      const result = await sendInvoiceEmail(invoice.id);
+      alert('Invoice emailed successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to email invoice');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (loading)
     return <div className="text-gray-400">Loading Purchase Orders...</div>;
@@ -54,7 +101,7 @@ export function PurchaseOrder() {
                     {po.poNumber}
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] ${po.status === "GENERATED" ? "bg-blue-900/30 text-blue-400" : "bg-emerald-900/30 text-emerald-400"}`}
+                    className={`px-2 py-0.5 rounded text-[10px] ${po.status === "GENERATED" ? "bg-blue-900/30 text-blue-400" : po.status === "SENT" ? "bg-amber-900/30 text-amber-400" : "bg-emerald-900/30 text-emerald-400"}`}
                   >
                     {po.status}
                   </span>
@@ -93,11 +140,19 @@ export function PurchaseOrder() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
-                  <Download className="w-4 h-4" /> PDF
+                <button
+                  onClick={handleDownloadPdf}
+                  disabled={actionLoading === 'pdf'}
+                  className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" /> {actionLoading === 'pdf' ? 'Generating...' : 'PDF'}
                 </button>
-                <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
-                  <Mail className="w-4 h-4" /> Email
+                <button
+                  onClick={handleEmailInvoice}
+                  disabled={actionLoading === 'email'}
+                  className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm disabled:opacity-50"
+                >
+                  <Mail className="w-4 h-4" /> {actionLoading === 'email' ? 'Sending...' : 'Email'}
                 </button>
               </div>
             </div>
@@ -153,13 +208,8 @@ export function PurchaseOrder() {
                   <thead className="bg-zinc-800/50 text-gray-400 border-b border-zinc-800">
                     <tr>
                       <th className="px-6 py-3 font-medium">Description</th>
-                      <th className="px-6 py-3 font-medium text-right">Qty</th>
-                      <th className="px-6 py-3 font-medium text-right">
-                        Unit Price
-                      </th>
-                      <th className="px-6 py-3 font-medium text-right">
-                        Total
-                      </th>
+                      <th className="px-6 py-3 font-medium text-right">Unit Price</th>
+                      <th className="px-6 py-3 font-medium text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800 text-gray-300">
@@ -167,9 +217,6 @@ export function PurchaseOrder() {
                       (item: any, idx: number) => (
                         <tr key={idx}>
                           <td className="px-6 py-4">{item.item}</td>
-                          <td className="px-6 py-4 text-right">
-                            {item.quantity}
-                          </td>
                           <td className="px-6 py-4 text-right">
                             ₹
                             {item.unitPrice.toLocaleString("en-IN", {

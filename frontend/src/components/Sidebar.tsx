@@ -12,20 +12,36 @@ import {
   Activity 
 } from 'lucide-react';
 
-const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Vendors', path: '/vendors', icon: Users },
-  { name: 'RFQ\'s', path: '/rfqs', icon: FileText },
-  { name: 'Quotations', path: '/quotations', icon: MessageSquareQuote },
-  { name: 'Approvals', path: '/approvals', icon: CheckSquare },
-  { name: 'Purchase orders', path: '/purchase-orders', icon: ShoppingCart },
-  { name: 'Invoices', path: '/invoices', icon: Receipt },
-  { name: 'Reports', path: '/reports', icon: BarChart3 },
-  { name: 'Activity', path: '/activity', icon: Activity },
+interface NavItem {
+  name: string;
+  path: string;
+  icon: React.ElementType;
+  roles: string[]; // Which roles can see this item
+}
+
+const allNavItems: NavItem[] = [
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'PROCUREMENT_OFFICER', 'VENDOR'] },
+  { name: 'Vendors', path: '/vendors', icon: Users, roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
+  { name: "RFQ's", path: '/rfqs', icon: FileText, roles: ['ADMIN', 'MANAGER', 'PROCUREMENT_OFFICER', 'VENDOR'] },
+  { name: 'Quotations', path: '/quotations', icon: MessageSquareQuote, roles: ['VENDOR'] },
+  { name: 'Compare Quotes', path: '/compare', icon: MessageSquareQuote, roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
+  { name: 'Approvals', path: '/approvals', icon: CheckSquare, roles: ['MANAGER', 'ADMIN'] },
+  { name: 'Purchase orders', path: '/purchase-orders', icon: ShoppingCart, roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'VENDOR'] },
+  { name: 'Invoices', path: '/invoices', icon: Receipt, roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'VENDOR'] },
+  { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['ADMIN'] },
+  { name: 'Activity', path: '/activity', icon: Activity, roles: ['ADMIN'] },
 ];
+
+// Get visible nav items based on user role
+function getVisibleNavItems(role: string): NavItem[] {
+  return allNavItems.filter(item => item.roles.includes(role));
+}
 
 export function Sidebar() {
   const location = useLocation();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const role: string = user.role || '';
+  const navItems = getVisibleNavItems(role);
 
   return (
     <div className="w-64 h-screen bg-[#0A0A0A] border-r border-zinc-800 flex flex-col fixed top-0 left-0">

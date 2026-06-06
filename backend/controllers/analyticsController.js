@@ -38,6 +38,87 @@ exports.getKpis = async (req, res) => {
   }
 };
 
+// @desc    Get Monthly Spend Trend
+// @route   GET /api/analytics/monthly-trend
+// @access  Private (Admin, Manager)
+exports.getMonthlyTrend = async (req, res) => {
+  try {
+    const purchaseOrders = await prisma.purchaseOrder.findMany({
+      select: {
+        totalAmount: true,
+        poDate: true,
+      },
+    });
+
+    const monthlyMap = purchaseOrders.reduce((acc, po) => {
+      const date = new Date(po.poDate);
+      const monthYear = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      if (!acc[monthYear]) {
+        acc[monthYear] = 0;
+      }
+      acc[monthYear] += po.totalAmount;
+      return acc;
+    }, {});
+
+    const monthlyTrend = Object.keys(monthlyMap).map(month => ({
+      name: month,
+      value: monthlyMap[month],
+    }));
+
+    monthlyTrend.sort((a, b) => {
+      const dateA = new Date(a.name);
+      const dateB = new Date(b.name);
+      return dateA - dateB;
+    });
+
+    res.status(200).json(monthlyTrend);
+  } catch (error) {
+    console.error('getMonthlyTrend Error:', error);
+    res.status(500).json({ error: 'Server error while fetching monthly trend' });
+  }
+};
+
+// @desc    Get Top Vendors by Spend
+// @route   GET /api/analytics/top-vendors
+// @access  Private (Admin, Manager)
+exports.getTopVendors = async (req, res) => {
+  try {
+    const purchaseOrders = await prisma.purchaseOrder.findMany({
+      select: {
+        totalAmount: true,
+        vendor: {
+          select: {
+            companyName: true,
+          },
+        },
+      },
+    });
+
+    const vendorMap = purchaseOrders.reduce((acc, po) => {
+      const name = po.vendor?.companyName || 'Unknown';
+      if (!acc[name]) {
+        acc[name] = { totalSpend: 0, poCount: 0 };
+      }
+      acc[name].totalSpend += po.totalAmount;
+      acc[name].poCount += 1;
+      return acc;
+    }, {});
+
+    const topVendors = Object.keys(vendorMap).map(name => ({
+      name,
+      spend: vendorMap[name].totalSpend,
+      pos: vendorMap[name].poCount,
+    }));
+
+    topVendors.sort((a, b) => b.spend - a.spend);
+
+    res.status(200).json(topVendors);
+  } catch (error) {
+    console.error('getTopVendors Error:', error);
+    res.status(500).json({ error: 'Server error while fetching top vendors' });
+  }
+};
+
 // @desc    Get Total Spend Grouped By Category
 // @route   GET /api/analytics/spend-by-category
 // @access  Private (Admin, Manager)

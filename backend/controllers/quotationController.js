@@ -125,6 +125,31 @@ exports.getVendorQuotations = async (req, res) => {
   }
 };
 
+// @desc    List all quotations (for admin/manager/procurement)
+// @route   GET /api/quotations
+// @access  Private (Admin, Manager, Procurement Officer)
+exports.getAllQuotations = async (req, res) => {
+  try {
+    const quotations = await prisma.quotation.findMany({
+      include: {
+        vendor: {
+          select: { companyName: true, contactEmail: true }
+        },
+        rfq: {
+          select: { title: true, category: true, status: true }
+        },
+        quotationLineItems: true
+      },
+      orderBy: { grandTotal: 'desc' }
+    });
+
+    res.status(200).json(quotations);
+  } catch (error) {
+    console.error('getAllQuotations Error:', error);
+    res.status(500).json({ error: 'Server error while fetching quotations.' });
+  }
+};
+
 // @desc    Compare quotes for a specific RFQ
 // @route   GET /api/quotations/compare/:rfqId
 // @access  Private (Admin, Manager, Procurement Officer)

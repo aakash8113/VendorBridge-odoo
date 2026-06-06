@@ -36,35 +36,13 @@ exports.getPendingApprovals = async (req, res) => {
   }
 };
 
-// @desc    Reject a quotation
-// @route   PUT /api/quotations/:id/reject
-// @access  Private (Manager, Admin)
-exports.rejectQuotation = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const quotation = await prisma.quotation.findUnique({ where: { id } });
-
-    if (!quotation) return res.status(404).json({ error: 'Quotation not found' });
-    if (quotation.status !== 'SUBMITTED') return res.status(400).json({ error: 'Only SUBMITTED quotations can be rejected' });
-
-    const rejectedQuote = await prisma.quotation.update({
-      where: { id },
-      data: { status: 'REJECTED' }
-    });
-
-    res.status(200).json({ message: 'Quotation rejected', quotation: rejectedQuote });
-  } catch (error) {
-    console.error('rejectQuotation Error:', error);
-    res.status(500).json({ error: 'Server error during rejection workflow' });
-  }
-};
-
 // @desc    Approve a quotation and generate a Purchase Order
 // @route   PUT /api/quotations/:id/approve
 // @access  Private (Manager, Admin)
 exports.approveQuotation = async (req, res) => {
   try {
     const { id } = req.params;
+    const { approvalRemarks } = req.body;
 
     const quotation = await prisma.quotation.findUnique({
       where: { id },
@@ -76,10 +54,13 @@ exports.approveQuotation = async (req, res) => {
     const { rfqId, vendorId, grandTotal } = quotation;
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-      // 1. Update intended Quotation
+      // 1. Update intended Quotation with status and approval remarks
       const approvedQuote = await tx.quotation.update({
         where: { id },
-        data: { status: 'SELECTED' }
+        data: { 
+          status: 'SELECTED',
+          approvalRemarks: approvalRemarks || null,
+        }
       });
 
       // 2. Reject all OTHER quotations linked to the same RFQ
@@ -122,5 +103,33 @@ exports.approveQuotation = async (req, res) => {
   } catch (error) {
     console.error('approveQuotation Error:', error);
     res.status(500).json({ error: 'Server error during approval workflow' });
+  }
+};
+
+// @desc    Reject a quotation with remarks
+// @route   PUT /api/quotations/:id/reject
+// @access  Private (Manager, Admin)
+exports.rejectQuotation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approvalRemarks } = req.body;
+
+    const quotation = await prisma.quotation.findUnique({ where: { id } });
+
+    if (!quotation) return res.status(404).json({ error: 'Quotation not found' });
+    if (quotation.status !== 'SUBMITTED') return res.status(400).json({ error: 'Only SUBMITTED quotations can be rejected' });
+
+    const rejectedQuote = await prisma.quotation.update({
+      where: { id },
+      data: { 
+        status: 'REJECTED',
+        approvalRemarks: approvalRemarks || null,
+      }
+    });
+
+    res.status(200).json({ message: 'Quotation rejected', quotation: rejectedQuote });
+  } catch (error) {
+    console.error('rejectQuotation Error:', error);
+    res.status(500).json({ error: 'Server error during rejection workflow' });
   }
 };
