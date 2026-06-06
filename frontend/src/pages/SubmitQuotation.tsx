@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 export function SubmitQuotation() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [rfqs, setRfqs] = useState([]);
+  const [rfqs, setRfqs] = useState<any[]>([]);
   const [selectedRfqId, setSelectedRfqId] = useState('');
   
   // Form State
@@ -14,13 +14,13 @@ export function SubmitQuotation() {
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [lineItems, setLineItems] = useState([{ item: '', quantity: 1, unitPrice: 0 }]);
 
-  // Fetch RFQs assigned to this vendor
+  // Fetch active RFQs assigned to the vendor
   useEffect(() => {
     async function loadAssignedRfqs() {
       try {
-        // Assuming you have an endpoint or get it from /rfqs filtering by assigned vendor
         const data = await apiFetch('/rfqs'); 
-        setRfqs(data);
+        // Filter to ensure we only show open RFQs
+        setRfqs(data.filter((r: any) => r.status === 'PUBLISHED'));
       } catch (err) {
         console.error("Failed to load RFQs", err);
       }
@@ -28,14 +28,26 @@ export function SubmitQuotation() {
     loadAssignedRfqs();
   }, []);
 
+  // AUTO-POPULATE LINE ITEMS when RFQ is selected
+  useEffect(() => {
+    if (selectedRfqId) {
+      const rfq = rfqs.find(r => r.id === selectedRfqId);
+      if (rfq && rfq.lineItems && rfq.lineItems.length > 0) {
+        setLineItems(rfq.lineItems.map((li: any) => ({
+          item: li.item,
+          quantity: li.quantity,
+          unitPrice: 0
+        })));
+      } else {
+        setLineItems([{ item: '', quantity: 1, unitPrice: 0 }]); // Reset if none
+      }
+    }
+  }, [selectedRfqId, rfqs]);
+
   const handleLineItemChange = (index: number, field: string, value: string | number) => {
     const newItems = [...lineItems];
     newItems[index] = { ...newItems[index], [field]: value };
     setLineItems(newItems);
-  };
-
-  const handleAddLineItem = () => {
-    setLineItems([...lineItems, { item: '', quantity: 1, unitPrice: 0 }]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,6 +56,14 @@ export function SubmitQuotation() {
     
     setLoading(true);
     try {
+      // Calculate total inside map to send exact line item format expected by prisma
+      const formattedLineItems = lineItems.map(li => ({
+        item: li.item,
+        unitPrice: Number(li.unitPrice),
+        quantity: Number(li.quantity),
+        total: Number(li.quantity) * Number(li.unitPrice)
+      }));
+
       await apiFetch('/quotations', {
         method: 'POST',
         body: JSON.stringify({
@@ -51,7 +71,9 @@ export function SubmitQuotation() {
           gstPercentage,
           deliveryDays,
           paymentTerms,
-          lineItems
+          subtotal: subtotal,
+          grandTotal: grandTotal,
+          lineItems: formattedLineItems
         })
       });
       alert('Quotation submitted successfully!');
@@ -102,20 +124,19 @@ export function SubmitQuotation() {
         </div>
 
         <div className="space-y-4">
-          <label className="text-sm text-gray-400">Line Items & Pricing</label>
+          <label className="text-sm text-gray-400">Line Items & Pricing (Auto-loaded from RFQ)</label>
           <div className="space-y-2">
             {lineItems.map((li, index) => (
               <div key={index} className="flex gap-2 text-sm">
-                <input type="text" placeholder="Item Name" value={li.item} onChange={(e) => handleLineItemChange(index, 'item', e.target.value)} className="flex-1 bg-black/50 border border-zinc-700 text-gray-100 rounded p-2" required />
-                <input type="number" placeholder="Qty" value={li.quantity} onChange={(e) => handleLineItemChange(index, 'quantity', Number(e.target.value))} className="w-24 bg-black/50 border border-zinc-700 text-gray-100 rounded p-2" required />
-                <input type="number" placeholder="Unit Price (₹)" value={li.unitPrice} onChange={(e) => handleLineItemChange(index, 'unitPrice', Number(e.target.value))} className="w-32 bg-black/50 border border-zinc-700 text-gray-100 rounded p-2" required />
+                <input type="text" placeholder="Item Name" value={li.item} readOnly className="flex-1 bg-black/30 border border-zinc-800 text-gray-400 rounded p-2" required />
+                <input type="number" placeholder="Qty" value={li.quantity} readOnly className="w-24 bg-black/30 border border-zinc-800 text-gray-400 rounded p-2 text-center" required />
+                <input type="number" placeholder="Unit Price (₹)" value={li.unitPrice} onChange={(e) => handleLineItemChange(index, 'unitPrice', Number(e.target.value))} className="w-32 bg-black/50 border border-zinc-700 text-gray-100 rounded p-2 focus:border-blue-500 outline-none transition-colors" required min="0" />
                 <div className="w-32 bg-black/30 border border-zinc-800 text-gray-400 rounded p-2 flex items-center justify-end">
                   ₹{(li.quantity * li.unitPrice).toFixed(2)}
                 </div>
               </div>
             ))}
           </div>
-          <button type="button" onClick={handleAddLineItem} className="text-sm text-blue-400 hover:text-blue-300">+ Add another item</button>
         </div>
 
         <div className="border-t border-zinc-800 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
