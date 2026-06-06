@@ -1,282 +1,252 @@
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import { connectDB } from './config/db.js';
+import User from './models/User.model.js';
+import Vendor from './models/Vendor.model.js';
+import RFQ from './models/RFQ.model.js';
+import Quotation from './models/Quotation.model.js';
+import Approval from './models/Approval.model.js';
+import PurchaseOrder from './models/PurchaseOrder.model.js';
+import Invoice from './models/Invoice.model.js';
+import ActivityLog from './models/ActivityLog.model.js';
 
-const prisma = new PrismaClient();
+const daysAgo = (n) => new Date(Date.now() - n * 86400000);
+const daysFromNow = (n) => new Date(Date.now() + n * 86400000);
 
-async function main() {
-  console.log('🌱 Seeding VendorBridge database...');
+const seed = async () => {
+  await connectDB();
+  console.log('\n🗑  Clearing old data...');
 
-  // Clean existing data in reverse dependency order
-  await prisma.activityLog.deleteMany();
-  await prisma.invoice.deleteMany();
-  await prisma.purchaseOrder.deleteMany();
-  await prisma.quotationLineItem.deleteMany();
-  await prisma.quotation.deleteMany();
-  await prisma.rfqLineItem.deleteMany();
-  await prisma.rFQ.deleteMany();
-  await prisma.vendor.deleteMany();
-  await prisma.user.deleteMany();
+  await User.deleteMany({ email: /^test_/ });
+  await Vendor.deleteMany({ email: /^test_/ });
+  await RFQ.deleteMany({});
+  await Quotation.deleteMany({});
+  await Approval.deleteMany({});
+  await PurchaseOrder.deleteMany({});
+  await Invoice.deleteMany({});
+  await ActivityLog.deleteMany({});
 
-  const hashedPassword = await bcrypt.hash('password123', 10);
+  const PWD = 'TestPass123';
 
-  // ── 1. Create Users ──────────────────────────────────────────────────
-  const admin = await prisma.user.create({
-    data: { name: 'Admin User', email: 'admin@vendorbridge.com', password: hashedPassword, role: 'ADMIN' },
-  });
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1. USERS
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('👤 Creating users...');
+  const admin = await User.create({ firstName: 'System', lastName: 'Admin', email: 'test_admin@vendorbridge.com', password: PWD, role: 'admin', isVerified: true, isActive: true });
+  const manager = await User.create({ firstName: 'Priya', lastName: 'Sharma', email: 'test_manager@vendorbridge.com', password: PWD, role: 'manager', isVerified: true, isActive: true });
+  const officer = await User.create({ firstName: 'Rahul', lastName: 'Mehta', email: 'test_officer@vendorbridge.com', password: PWD, role: 'officer', isVerified: true, isActive: true });
 
-  const manager = await prisma.user.create({
-    data: { name: 'Priya Sharma', email: 'manager@vendorbridge.com', password: hashedPassword, role: 'MANAGER' },
-  });
+  const vUser1 = await User.create({ firstName: 'Acme', lastName: 'Supplies', email: 'test_vendor1@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUser2 = await User.create({ firstName: 'Globex', lastName: 'Logistics', email: 'test_vendor2@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUser3 = await User.create({ firstName: 'Initech', lastName: 'Office', email: 'test_vendor3@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUser4 = await User.create({ firstName: 'Umbrella', lastName: 'Corp', email: 'test_vendor4@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUser5 = await User.create({ firstName: 'Stark', lastName: 'Medical', email: 'test_vendor5@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
 
-  const procurementOfficer = await prisma.user.create({
-    data: { name: 'Rahul Verma', email: 'procurement@vendorbridge.com', password: hashedPassword, role: 'PROCUREMENT_OFFICER' },
-  });
+  // Additional category users
+  const vUserRaw1 = await User.create({ firstName: 'Apex', lastName: 'Steel', email: 'test_vendor_raw1@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUserRaw2 = await User.create({ firstName: 'Indus', lastName: 'Polymers', email: 'test_vendor_raw2@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUserCons1 = await User.create({ firstName: 'Beacon', lastName: 'Consulting', email: 'test_vendor_cons1@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUserMkt1 = await User.create({ firstName: 'BlueWave', lastName: 'Marketing', email: 'test_vendor_mkt1@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
+  const vUserOther1 = await User.create({ firstName: 'Alliance', lastName: 'Trade', email: 'test_vendor_other1@vendorbridge.com', password: PWD, role: 'vendor', isVerified: true, isActive: true });
 
-  // ── 2. Create Vendors ────────────────────────────────────────────────
-  const vendorData = [
-    { companyName: 'TechCore Solutions Pvt Ltd', category: 'IT Hardware', gstNumber: '27AABCU1234D1Z1', contactEmail: 'info@techcore.in', contactPhone: '9876543210', address: 'B-201, Tech Park, Bangalore', status: 'ACTIVE', rating: 4.5 },
-    { companyName: 'Infra Supplies Pvt Ltd', category: 'Furniture', gstNumber: '27AABCI5678E1Z2', contactEmail: 'sales@infrasupplies.in', contactPhone: '9876543211', address: 'C-45, Industrial Area, Mumbai', status: 'ACTIVE', rating: 4.2 },
-    { companyName: 'FastLog Transport Co.', category: 'Logistics', gstNumber: '27AABCF9012F1Z3', contactEmail: 'ops@fastlog.in', contactPhone: '9876543212', address: 'Warehouse 12, Transport Nagar, Delhi', status: 'ACTIVE', rating: 3.8 },
-    { companyName: 'OfficeNeeds Ltd', category: 'Stationery', gstNumber: '27AABCO3456G1Z4', contactEmail: 'orders@officeneeds.in', contactPhone: '9876543213', address: 'Shop 7, Mall Road, Kolkata', status: 'ACTIVE', rating: 4.0 },
-    { companyName: 'GreenEnergy Systems', category: 'Renewable Energy', gstNumber: '27AABCG7890H1Z5', contactEmail: 'hello@greenenergy.in', contactPhone: '9876543214', address: 'Plot 88, Solar Park, Pune', status: 'PENDING', rating: 0.0 },
-  ];
+  // ──────────────────────────────────────────────────────────────────────────
+  // 2. VENDOR PROFILES  (different statuses: active, pending, blocked)
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('🏭 Creating vendor profiles...');
+  const v1 = await Vendor.create({ companyName: 'Acme Supplies Pvt Ltd', category: 'IT & Hardware', gstNumber: '29AAAAA1111A1Z1', contactPerson: 'Amit Joshi', email: 'test_vendor1@vendorbridge.com', phone: '+919876543210', country: 'India', address: '123 Tech Park, Bangalore, KA 560001', status: 'active', rating: 4.8, totalOrders: 8, totalSpend: 1250000, linkedUser: vUser1._id, createdBy: admin._id });
+  const v2 = await Vendor.create({ companyName: 'Globex Logistics Corp', category: 'Logistics', gstNumber: '27BBBBB2222B2Z2', contactPerson: 'Sneha Kulkarni', email: 'test_vendor2@vendorbridge.com', phone: '+919998887776', country: 'India', address: '456 Shipping Terminal, Mumbai, MH 400001', status: 'active', rating: 4.2, totalOrders: 5, totalSpend: 620000, linkedUser: vUser2._id, createdBy: admin._id });
+  const v3 = await Vendor.create({ companyName: 'Initech Office Solutions', category: 'Office Supplies', gstNumber: '24CCCCC3333C3Z3', contactPerson: 'Ravi Patel', email: 'test_vendor3@vendorbridge.com', phone: '+918887776665', country: 'India', address: '789 Business Park, Hyderabad, TS 500001', status: 'active', rating: 3.9, totalOrders: 3, totalSpend: 310000, linkedUser: vUser3._id, createdBy: admin._id });
+  const v4 = await Vendor.create({ companyName: 'Umbrella Infra Solutions', category: 'Facilities', gstNumber: '07DDDDD4444D4Z4', contactPerson: 'Deepa Nair', email: 'test_vendor4@vendorbridge.com', phone: '+917776665554', country: 'India', address: '101 Infrastructure Lane, Delhi, DL 110001', status: 'pending', rating: 3.1, totalOrders: 0, totalSpend: 0, linkedUser: vUser4._id, createdBy: admin._id });
+  const v5 = await Vendor.create({ companyName: 'Stark Facilities & Safety', category: 'Facilities', gstNumber: '19EEEEE5555E5Z5', contactPerson: 'Arjun Bose', email: 'test_vendor5@vendorbridge.com', phone: '+916665554443', country: 'India', address: '202 BioTech Avenue, Kolkata, WB 700001', status: 'active', rating: 4.6, totalOrders: 2, totalSpend: 480000, linkedUser: vUser5._id, createdBy: admin._id });
 
-  const vendors = [];
-  for (const v of vendorData) {
-    const vendor = await prisma.vendor.create({ data: v });
-    vendors.push(vendor);
-  }
-  console.log(`  ✅ Created ${vendors.length} vendors`);
+  // Additional vendors to cover missing categories
+  const vRaw1 = await Vendor.create({ companyName: 'Apex Steel & Alloys', category: 'Raw Materials', gstNumber: '29RAWAA1111A1Z1', contactPerson: 'Vijay Sharma', email: 'test_vendor_raw1@vendorbridge.com', phone: '+919888877777', country: 'India', address: 'Plot 45, Industrial Zone, Pune, MH', status: 'active', rating: 4.5, totalOrders: 0, totalSpend: 0, linkedUser: vUserRaw1._id, createdBy: admin._id });
+  const vRaw2 = await Vendor.create({ companyName: 'Indus Polymers Ltd', category: 'Raw Materials', gstNumber: '29RAWB2222B2Z2', contactPerson: 'Karan Malhotra', email: 'test_vendor_raw2@vendorbridge.com', phone: '+919777766666', country: 'India', address: 'Chemical Belt Phase 2, Chennai, TN', status: 'active', rating: 4.1, totalOrders: 0, totalSpend: 0, linkedUser: vUserRaw2._id, createdBy: admin._id });
+  const vCons1 = await Vendor.create({ companyName: 'Beacon Strategy Group', category: 'Consulting', gstNumber: '29CONAA1111A1Z1', contactPerson: 'Meera Sen', email: 'test_vendor_cons1@vendorbridge.com', phone: '+919666655555', country: 'India', address: 'Regus Center Floor 8, Mumbai, MH', status: 'active', rating: 4.7, totalOrders: 0, totalSpend: 0, linkedUser: vUserCons1._id, createdBy: admin._id });
+  const vMkt1 = await Vendor.create({ companyName: 'BlueWave Media House', category: 'Marketing', gstNumber: '29MKTAA1111A1Z1', contactPerson: 'Rohan Kapoor', email: 'test_vendor_mkt1@vendorbridge.com', phone: '+919555544444', country: 'India', address: 'Creative Studio 3B, Bangalore, KA', status: 'active', rating: 4.3, totalOrders: 0, totalSpend: 0, linkedUser: vUserMkt1._id, createdBy: admin._id });
+  const vOther1 = await Vendor.create({ companyName: 'Alliance Utilities & Trade', category: 'Other', gstNumber: '29OTHAA1111A1Z1', contactPerson: 'Sunil Verma', email: 'test_vendor_other1@vendorbridge.com', phone: '+919444433333', country: 'India', address: 'General Goods Terminal, Jaipur, RJ', status: 'active', rating: 4.0, totalOrders: 0, totalSpend: 0, linkedUser: vUserOther1._id, createdBy: admin._id });
 
-  // ── Link vendor users ────────────────────────────────────────────────
-  const vendorUsers = [];
-  for (let i = 0; i < vendors.length; i++) {
-    const vu = await prisma.user.create({
-      data: {
-        name: `${vendors[i].companyName} Rep`,
-        email: `vendor${i + 1}@vendorbridge.com`,
-        password: hashedPassword,
-        role: 'VENDOR',
-        vendorId: vendors[i].id,
-      },
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. RFQs — all statuses: draft, published, closed, cancelled
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('📋 Creating RFQs...');
+
+  // Published — open for bidding
+  const rfq1 = await RFQ.create({ rfqNumber: 'RFQ-2026-0001', title: 'Annual IT Laptops & Workstations Procurement', category: 'IT & Hardware', description: '15 high-performance developer laptops + 5 workstations for engineering team.', lineItems: [{ item: 'Developer Laptops (i9/32GB/2TB)', qty: 15, unit: 'units' }, { item: 'Workstation Tower (Xeon/64GB/4TB)', qty: 5, unit: 'units' }], deadline: daysFromNow(12), status: 'published', assignedVendors: [v1._id, v5._id], createdBy: officer._id });
+  const rfq2 = await RFQ.create({ rfqNumber: 'RFQ-2026-0002', title: 'Pan-India Warehouse Logistics Q3 Contract', category: 'Logistics', description: 'Quarterly logistics contract for interstate shipments across 8 states.', lineItems: [{ item: 'LTL Freight Shipments (per trip)', qty: 50, unit: 'trips' }, { item: 'Last-Mile Delivery (per package)', qty: 2000, unit: 'packages' }], deadline: daysFromNow(6), status: 'published', assignedVendors: [v2._id], createdBy: officer._id });
+  const rfq3 = await RFQ.create({ rfqNumber: 'RFQ-2026-0003', title: 'New Office Furniture — HQ Expansion Floor 4', category: 'Office Supplies', description: 'Ergonomic seating and executive desks for 3rd floor expansion of 40 seats.', lineItems: [{ item: 'Ergonomic Mesh Chairs', qty: 40, unit: 'units' }, { item: 'Executive Standing Desks', qty: 20, unit: 'units' }, { item: 'Filing Cabinets', qty: 10, unit: 'units' }], deadline: daysAgo(1), status: 'closed', assignedVendors: [v1._id, v3._id], createdBy: officer._id });
+  const rfq4 = await RFQ.create({ rfqNumber: 'RFQ-2026-0004', title: 'Server Room AC & UPS Installation', category: 'Facilities', description: 'Precision cooling units and UPS installation for primary data centre room.', lineItems: [{ item: 'Precision AC Unit (5 Ton)', qty: 2, unit: 'units' }, { item: 'Online UPS 40KVA', qty: 1, unit: 'unit' }], deadline: daysFromNow(20), status: 'published', assignedVendors: [v4._id], createdBy: officer._id });
+  const rfq5 = await RFQ.create({ rfqNumber: 'RFQ-2026-0005', title: 'Annual Medical PPE & First Aid Replenishment', category: 'Facilities', description: 'Yearly safety supplies for all 4 office locations.', lineItems: [{ item: 'N95 Respirator Masks', qty: 1000, unit: 'units' }, { item: 'First Aid Kit (Complete)', qty: 20, unit: 'kits' }, { item: 'Nitrile Gloves (Box of 100)', qty: 100, unit: 'boxes' }], deadline: daysAgo(5), status: 'closed', assignedVendors: [v5._id], createdBy: officer._id });
+  const rfq6 = await RFQ.create({ rfqNumber: 'RFQ-2026-0006', title: 'Cloud Software Licenses — Microsoft 365 E3', category: 'IT & Hardware', description: '1-year Microsoft 365 E3 renewal for 200 user seats.', lineItems: [{ item: 'Microsoft 365 E3 (per seat/year)', qty: 200, unit: 'seats' }], deadline: daysFromNow(30), status: 'draft', assignedVendors: [v1._id], createdBy: officer._id });
+  const rfq7 = await RFQ.create({ rfqNumber: 'RFQ-2026-0007', title: 'Office Canteen Equipment Overhaul', category: 'Office Supplies', description: 'Full canteen equipment replacement — refrigerators, microwaves, water purifiers.', lineItems: [{ item: 'Commercial Refrigerator', qty: 3, unit: 'units' }, { item: 'Industrial Microwave', qty: 5, unit: 'units' }, { item: 'Water Purifier (RO+UV)', qty: 10, unit: 'units' }], deadline: daysAgo(10), status: 'cancelled', assignedVendors: [v3._id], createdBy: officer._id });
+  const rfq8 = await RFQ.create({ rfqNumber: 'RFQ-2026-0008', title: 'Network Infrastructure Upgrade — Cat6A Cabling', category: 'IT & Hardware', description: 'Structured cabling upgrade for 3 floors with patch panels and PoE switches.', lineItems: [{ item: 'Cat6A Cable (per metre)', qty: 5000, unit: 'metres' }, { item: '48-Port PoE+ Switch', qty: 6, unit: 'units' }, { item: '24-Port Patch Panel', qty: 12, unit: 'units' }], deadline: daysAgo(3), status: 'closed', assignedVendors: [v1._id, v2._id], createdBy: officer._id });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 4. QUOTATIONS — various statuses
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('💬 Creating quotations...');
+
+  // RFQ1 — published, 2 submitted bids
+  const q1a = await Quotation.create({ rfq: rfq1._id, vendor: v1._id, items: [{ item: 'Developer Laptops (i9/32GB/2TB)', qty: 15, unitPrice: 85000, total: 1275000 }, { item: 'Workstation Tower (Xeon/64GB/4TB)', qty: 5, unitPrice: 210000, total: 1050000 }], subtotal: 2325000, gstPercent: 18, gstAmount: 418500, grandTotal: 2743500, deliveryDays: 10, paymentTerms: '30 Days Net', notes: '3-year onsite warranty, Windows 11 Pro pre-installed.', status: 'submitted', submittedAt: daysAgo(2) });
+  const q1b = await Quotation.create({ rfq: rfq1._id, vendor: v5._id, items: [{ item: 'Developer Laptops (i9/32GB/2TB)', qty: 15, unitPrice: 79000, total: 1185000 }, { item: 'Workstation Tower (Xeon/64GB/4TB)', qty: 5, unitPrice: 195000, total: 975000 }], subtotal: 2160000, gstPercent: 18, gstAmount: 388800, grandTotal: 2548800, deliveryDays: 14, paymentTerms: 'Advance 20%, Balance on delivery', notes: 'ISI-certified hardware. Dispatch from Kolkata warehouse.', status: 'submitted', submittedAt: daysAgo(1) });
+  rfq1.quotationCount = 2; await rfq1.save();
+
+  // RFQ2 — published, 1 submitted
+  const q2a = await Quotation.create({ rfq: rfq2._id, vendor: v2._id, items: [{ item: 'LTL Freight Shipments (per trip)', qty: 50, unitPrice: 9500, total: 475000 }, { item: 'Last-Mile Delivery (per package)', qty: 2000, unitPrice: 75, total: 150000 }], subtotal: 625000, gstPercent: 18, gstAmount: 112500, grandTotal: 737500, deliveryDays: 3, paymentTerms: 'Weekly billing cycle', notes: 'GPS-tracked fleet. 24×7 POD confirmation.', status: 'submitted', submittedAt: daysAgo(3) });
+  rfq2.quotationCount = 1; await rfq2.save();
+
+  // RFQ3 — closed, 2 bids — one selected, one rejected
+  const q3a = await Quotation.create({ rfq: rfq3._id, vendor: v1._id, items: [{ item: 'Ergonomic Mesh Chairs', qty: 40, unitPrice: 8500, total: 340000 }, { item: 'Executive Standing Desks', qty: 20, unitPrice: 22000, total: 440000 }, { item: 'Filing Cabinets', qty: 10, unitPrice: 6500, total: 65000 }], subtotal: 845000, gstPercent: 18, gstAmount: 152100, grandTotal: 997100, deliveryDays: 21, paymentTerms: '50% Advance + 50% on delivery', notes: 'Premium Herman Miller inspired ergonomic range.', status: 'selected', submittedAt: daysAgo(6) });
+  const q3b = await Quotation.create({ rfq: rfq3._id, vendor: v3._id, items: [{ item: 'Ergonomic Mesh Chairs', qty: 40, unitPrice: 6800, total: 272000 }, { item: 'Executive Standing Desks', qty: 20, unitPrice: 18500, total: 370000 }, { item: 'Filing Cabinets', qty: 10, unitPrice: 5200, total: 52000 }], subtotal: 694000, gstPercent: 18, gstAmount: 124920, grandTotal: 818920, deliveryDays: 25, paymentTerms: '100% post-delivery', notes: 'Economy range with 1-year warranty.', status: 'rejected', submittedAt: daysAgo(6) });
+  rfq3.quotationCount = 2; await rfq3.save();
+
+  // RFQ5 — closed, 1 selected bid
+  const q5a = await Quotation.create({ rfq: rfq5._id, vendor: v5._id, items: [{ item: 'N95 Respirator Masks', qty: 1000, unitPrice: 85, total: 85000 }, { item: 'First Aid Kit (Complete)', qty: 20, unitPrice: 2200, total: 44000 }, { item: 'Nitrile Gloves (Box of 100)', qty: 100, unitPrice: 380, total: 38000 }], subtotal: 167000, gstPercent: 12, gstAmount: 20040, grandTotal: 187040, deliveryDays: 7, paymentTerms: '100% Advance', notes: 'CE-certified PPE. ISO 9001 quality assured.', status: 'selected', submittedAt: daysAgo(8) });
+  rfq5.quotationCount = 1; await rfq5.save();
+
+  // RFQ8 — closed, 2 bids — both submitted (not yet selected)
+  const q8a = await Quotation.create({ rfq: rfq8._id, vendor: v1._id, items: [{ item: 'Cat6A Cable (per metre)', qty: 5000, unitPrice: 42, total: 210000 }, { item: '48-Port PoE+ Switch', qty: 6, unitPrice: 28000, total: 168000 }, { item: '24-Port Patch Panel', qty: 12, unitPrice: 4500, total: 54000 }], subtotal: 432000, gstPercent: 18, gstAmount: 77760, grandTotal: 509760, deliveryDays: 12, paymentTerms: '30 Days Net', notes: 'Certified Cisco/D-Link authorized partner.', status: 'submitted', submittedAt: daysAgo(4) });
+  const q8b = await Quotation.create({ rfq: rfq8._id, vendor: v2._id, items: [{ item: 'Cat6A Cable (per metre)', qty: 5000, unitPrice: 38, total: 190000 }, { item: '48-Port PoE+ Switch', qty: 6, unitPrice: 25500, total: 153000 }, { item: '24-Port Patch Panel', qty: 12, unitPrice: 4100, total: 49200 }], subtotal: 392200, gstPercent: 18, gstAmount: 70596, grandTotal: 462796, deliveryDays: 18, paymentTerms: 'Advance 30% + 70% on delivery', notes: 'Fluke-certified installation team included.', status: 'submitted', submittedAt: daysAgo(3) });
+  rfq8.quotationCount = 2; await rfq8.save();
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 5. APPROVALS — pending, l1_approved, approved, rejected
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('✅ Creating approvals...');
+
+  // Approval A — PENDING (L1 not yet reviewed) — from RFQ3 selection
+  const appA = await Approval.create({ quotation: q3a._id, rfq: rfq3._id, vendor: v1._id, steps: [{ role: 'manager', label: 'L1 Manager Review', status: 'pending' }, { role: 'manager', label: 'L2 Final Authorization', status: 'pending' }], currentStep: 0, overallStatus: 'pending', amount: q3a.grandTotal, initiatedBy: officer._id, createdAt: daysAgo(5) });
+
+  // Approval B — L1 APPROVED, waiting for L2 — from RFQ5 selection
+  const appB = await Approval.create({ quotation: q5a._id, rfq: rfq5._id, vendor: v5._id, steps: [{ approver: manager._id, role: 'manager', label: 'L1 Manager Review', status: 'approved', remarks: 'Competitive pricing. CE certified — approved.', actionAt: daysAgo(3) }, { role: 'manager', label: 'L2 Final Authorization', status: 'pending' }], currentStep: 1, overallStatus: 'l1_approved', amount: q5a.grandTotal, initiatedBy: officer._id, createdAt: daysAgo(4) });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // HISTORICAL DATA — fully approved → POs + Invoices (for charts)
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('📦 Creating historical POs and invoices...');
+
+  const makeHistory = async ({
+    poNumber, invoiceNumber, rfq, vendor, quotation,
+    lineItems, subtotal, grandTotal, gstPct = 18,
+    daysIssuedAgo, deliveryDaysFromIssue = 14, poStatus, invoiceStatus,
+    paidDaysAgo = null, deliveredDaysAgo = null,
+  }) => {
+    const cgst = subtotal * 0.09;
+    const sgst = subtotal * 0.09;
+    const issuedAt = daysAgo(daysIssuedAgo);
+    const deliveryDate = deliveredDaysAgo
+      ? daysAgo(deliveredDaysAgo)
+      : new Date(issuedAt.getTime() + deliveryDaysFromIssue * 86400000);
+
+    const mockApproval = await Approval.create({
+      quotation: quotation._id, rfq: rfq._id, vendor: vendor._id,
+      steps: [
+        { approver: manager._id, role: 'manager', label: 'L1 Manager Review', status: 'approved', remarks: 'Approved.', actionAt: daysAgo(daysIssuedAgo + 2) },
+        { approver: manager._id, role: 'manager', label: 'L2 Final Authorization', status: 'approved', remarks: 'Final signoff.', actionAt: daysAgo(daysIssuedAgo + 1) },
+      ],
+      currentStep: 2, overallStatus: 'approved', amount: grandTotal, initiatedBy: officer._id,
     });
-    vendorUsers.push(vu);
-  }
-  console.log(`  ✅ Created ${vendorUsers.length} vendor users`);
 
-  // ── 3. Create RFQs with time-distributed data ────────────────────────
-  const rfqTemplates = [
-    { title: 'Laptop Procurement Q2 2025', description: 'High-performance laptops for engineering team', category: 'IT Hardware', daysOffset: -60, deadlineOffset: -30, status: 'CLOSED', lineItems: [{ item: 'Dell Latitude 5440', quantity: 50, unit: 'NOS' }, { item: 'Lenovo ThinkPad X1', quantity: 30, unit: 'NOS' }] },
-    { title: 'Office Furniture Renovation', description: 'Ergonomic furniture for new office floor', category: 'Furniture', daysOffset: -55, deadlineOffset: -25, status: 'CLOSED', lineItems: [{ item: 'Standing Desks', quantity: 40, unit: 'NOS' }, { item: 'Ergonomic Chairs', quantity: 80, unit: 'NOS' }, { item: 'Conference Table', quantity: 5, unit: 'NOS' }] },
-    { title: 'Annual Stationery Supply', description: 'Yearly stationery bulk order', category: 'Stationery', daysOffset: -50, deadlineOffset: -20, status: 'PUBLISHED', lineItems: [{ item: 'A4 Paper Reams', quantity: 500, unit: 'BOX' }, { item: 'Printer Cartridges', quantity: 100, unit: 'NOS' }, { item: 'Notebooks', quantity: 300, unit: 'NOS' }] },
-    { title: 'Data Center Cooling Systems', description: 'Cooling infrastructure for new data center', category: 'IT Hardware', daysOffset: -45, deadlineOffset: -15, status: 'CLOSED', lineItems: [{ item: 'AC Units 5 Ton', quantity: 10, unit: 'NOS' }, { item: 'Coolant Pipes', quantity: 200, unit: 'MTR' }] },
-    { title: 'Logistics Partner Q3 2025', description: 'Pan-India logistics service provider', category: 'Logistics', daysOffset: -40, deadlineOffset: -10, status: 'PUBLISHED', lineItems: [{ item: 'Full Truckload Service', quantity: 12, unit: 'MONTH' }, { item: 'Warehousing Service', quantity: 10000, unit: 'SQFT' }] },
-    { title: 'Solar Panel Installation', description: 'Solar power setup for corporate office', category: 'Renewable Energy', daysOffset: -35, deadlineOffset: -5, status: 'DRAFT', lineItems: [{ item: 'Solar Panels 500W', quantity: 200, unit: 'NOS' }, { item: 'Inverters', quantity: 10, unit: 'NOS' }, { item: 'Battery Bank', quantity: 20, unit: 'NOS' }] },
-    { title: 'Network Equipment Upgrade', description: 'Switches, routers & firewalls', category: 'IT Hardware', daysOffset: -30, deadlineOffset: 10, status: 'PUBLISHED', lineItems: [{ item: 'Cisco Switches', quantity: 15, unit: 'NOS' }, { item: 'Firewall Appliances', quantity: 3, unit: 'NOS' }] },
-    { title: 'Office Expansion Furniture', description: 'Additional furniture for new wing', category: 'Furniture', daysOffset: -20, deadlineOffset: 20, status: 'PUBLISHED', lineItems: [{ item: 'Workstations', quantity: 25, unit: 'NOS' }, { item: 'Office Chairs', quantity: 50, unit: 'NOS' }] },
-    { title: 'Q3 Stationery Requirement', description: 'Quarterly stationery restock', category: 'Stationery', daysOffset: -10, deadlineOffset: 30, status: 'PUBLISHED', lineItems: [{ item: 'Stapler Machines', quantity: 50, unit: 'NOS' }, { item: 'Whiteboard Markers', quantity: 100, unit: 'NOS' }] },
-    { title: 'Transport Service Contract', description: 'Employee transport service for new shift', category: 'Logistics', daysOffset: -5, deadlineOffset: 35, status: 'PUBLISHED', lineItems: [{ item: 'AC Bus Service', quantity: 5, unit: 'NOS' }, { item: 'Shuttle Service', quantity: 8, unit: 'NOS' }] },
-  ];
-
-  const rfqs = [];
-  for (const tpl of rfqTemplates) {
-    const createdDate = new Date();
-    createdDate.setDate(createdDate.getDate() + tpl.daysOffset);
-    const deadlineDate = new Date();
-    deadlineDate.setDate(deadlineDate.getDate() + tpl.deadlineOffset);
-
-    // Assign 2-3 random vendors
-    const shuffled = [...vendors].sort(() => Math.random() - 0.5);
-    const assignedVendorIds = shuffled.slice(0, 2 + Math.floor(Math.random() * 2)).map(v => v.id);
-
-    const rfq = await prisma.rFQ.create({
-      data: {
-        title: tpl.title,
-        description: tpl.description,
-        category: tpl.category,
-        deadline: deadlineDate,
-        status: tpl.status,
-        createdById: procurementOfficer.id,
-        lineItems: { create: tpl.lineItems },
-        assignedVendors: { connect: assignedVendorIds.map(id => ({ id })) },
-      },
-      include: { lineItems: true, assignedVendors: true },
+    const po = await PurchaseOrder.create({
+      poNumber, rfq: rfq._id, vendor: vendor._id, quotation: quotation._id,
+      approval: mockApproval._id, lineItems,
+      subtotal, cgstAmount: cgst, sgstAmount: sgst, grandTotal: subtotal + cgst + sgst,
+      deliveryDate, status: poStatus,
+      issuedBy: officer._id, issuedAt,
+      orgName: 'VendorBridge Procurement Ltd.',
+      orgAddress: '404 ERP Square, Tech Park, Bangalore, KA 560103',
+      orgGst: '29CORP1234A1Z9',
     });
-    rfqs.push(rfq);
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        action: 'CREATED_RFQ',
-        performedById: procurementOfficer.id,
-        entityType: 'RFQ',
-        entityId: rfq.id,
-        createdAt: createdDate,
-      },
+    const invoiceDate = new Date(issuedAt.getTime() + 86400000);
+    const dueDate = new Date(invoiceDate.getTime() + 30 * 86400000);
+    const inv = await Invoice.create({
+      invoiceNumber, po: po._id, vendor: vendor._id, lineItems,
+      subtotal, cgst, sgst, grandTotal: subtotal + cgst + sgst,
+      invoiceDate, dueDate, status: invoiceStatus,
+      pdfUrl: `https://ik.imagekit.io/placeholder/${invoiceNumber}.pdf`,
+      pdfFileId: `pdf-${invoiceNumber.toLowerCase()}`,
+      sentAt: invoiceDate,
+      ...(paidDaysAgo ? { paidAt: daysAgo(paidDaysAgo) } : {}),
     });
-  }
-  console.log(`  ✅ Created ${rfqs.length} RFQs with line items`);
 
-  // ── 4. Create Quotations for PUBLISHED/CLOSED RFQs ──────────────────
-  const quotationItems = [
-    [{ item: 'Dell Latitude 5440', unitPrice: 65000, total: 3250000 }, { item: 'Lenovo ThinkPad X1', unitPrice: 85000, total: 2550000 }],
-    [{ item: 'Standing Desks', unitPrice: 35000, total: 1400000 }, { item: 'Ergonomic Chairs', unitPrice: 15000, total: 1200000 }, { item: 'Conference Table', unitPrice: 80000, total: 400000 }],
-    [{ item: 'A4 Paper Reams', unitPrice: 2500, total: 1250000 }, { item: 'Printer Cartridges', unitPrice: 3500, total: 350000 }, { item: 'Notebooks', unitPrice: 200, total: 60000 }],
-    [{ item: 'AC Units 5 Ton', unitPrice: 120000, total: 1200000 }, { item: 'Coolant Pipes', unitPrice: 500, total: 100000 }],
-    [{ item: 'Full Truckload Service', unitPrice: 80000, total: 960000 }, { item: 'Warehousing Service', unitPrice: 50, total: 500000 }],
-    [{ item: 'Cisco Switches', unitPrice: 45000, total: 675000 }, { item: 'Firewall Appliances', unitPrice: 120000, total: 360000 }],
-    [{ item: 'Workstations', unitPrice: 28000, total: 700000 }, { item: 'Office Chairs', unitPrice: 12000, total: 600000 }],
-    [{ item: 'Stapler Machines', unitPrice: 800, total: 40000 }, { item: 'Whiteboard Markers', unitPrice: 150, total: 15000 }],
-    [{ item: 'AC Bus Service', unitPrice: 2500000, total: 12500000 }, { item: 'Shuttle Service', unitPrice: 1800000, total: 14400000 }],
+    return { po, inv, mockApproval };
+  };
+
+  // ── Jan 2026: IT Hardware ──────────────────────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0001', invoiceNumber: 'INV-2026-0001', rfq: rfq3, vendor: v1, quotation: q3a, lineItems: [{ item: 'Ergonomic Mesh Chairs (Batch 1)', qty: 40, unitPrice: 8500, total: 340000 }], subtotal: 340000, grandTotal: 401200, daysIssuedAgo: 150, deliveredDaysAgo: 136, poStatus: 'delivered', invoiceStatus: 'paid', paidDaysAgo: 120 });
+  // ── Feb 2026: Logistics ───────────────────────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0002', invoiceNumber: 'INV-2026-0002', rfq: rfq2, vendor: v2, quotation: q2a, lineItems: [{ item: 'LTL Freight Q4 Batch', qty: 20, unitPrice: 9500, total: 190000 }], subtotal: 190000, grandTotal: 224200, daysIssuedAgo: 120, deliveredDaysAgo: 110, poStatus: 'delivered', invoiceStatus: 'paid', paidDaysAgo: 95 });
+  // ── Feb 2026: Medical ─────────────────────────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0003', invoiceNumber: 'INV-2026-0003', rfq: rfq5, vendor: v5, quotation: q5a, lineItems: [{ item: 'N95 Masks (Batch A)', qty: 500, unitPrice: 85, total: 42500 }, { item: 'First Aid Kits', qty: 10, unitPrice: 2200, total: 22000 }], subtotal: 64500, grandTotal: 76110, daysIssuedAgo: 115, deliveredDaysAgo: 108, poStatus: 'delivered', invoiceStatus: 'paid', paidDaysAgo: 90 });
+  // ── Mar 2026: IT Hardware ─────────────────────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0004', invoiceNumber: 'INV-2026-0004', rfq: rfq1, vendor: v1, quotation: q1a, lineItems: [{ item: 'Network Switches (PoE)', qty: 4, unitPrice: 28000, total: 112000 }], subtotal: 112000, grandTotal: 132160, daysIssuedAgo: 90, deliveredDaysAgo: 78, poStatus: 'delivered', invoiceStatus: 'paid', paidDaysAgo: 65 });
+  // ── Apr 2026: Office Supplies ─────────────────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0005', invoiceNumber: 'INV-2026-0005', rfq: rfq3, vendor: v3, quotation: q3b, lineItems: [{ item: 'Filing Cabinets', qty: 10, unitPrice: 5200, total: 52000 }, { item: 'Executive Desks (Standard)', qty: 8, unitPrice: 18500, total: 148000 }], subtotal: 200000, grandTotal: 236000, daysIssuedAgo: 65, deliveredDaysAgo: 52, poStatus: 'delivered', invoiceStatus: 'paid', paidDaysAgo: 40 });
+  // ── Apr 2026: Logistics (overdue invoice) ─────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0006', invoiceNumber: 'INV-2026-0006', rfq: rfq2, vendor: v2, quotation: q2a, lineItems: [{ item: 'LTL Freight — April Batch', qty: 15, unitPrice: 9500, total: 142500 }], subtotal: 142500, grandTotal: 168150, daysIssuedAgo: 55, deliveredDaysAgo: 44, poStatus: 'delivered', invoiceStatus: 'overdue' });
+  // ── May 2026: IT Hardware (issued, pending delivery) ──────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0007', invoiceNumber: 'INV-2026-0007', rfq: rfq8, vendor: v1, quotation: q8a, lineItems: [{ item: 'Cat6A Cabling (3000m)', qty: 3000, unitPrice: 42, total: 126000 }, { item: '48-Port PoE+ Switch', qty: 3, unitPrice: 28000, total: 84000 }], subtotal: 210000, grandTotal: 247800, daysIssuedAgo: 30, poStatus: 'issued', invoiceStatus: 'pending_payment' });
+  // ── May 2026: Medical (issued, pending delivery) ───────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0008', invoiceNumber: 'INV-2026-0008', rfq: rfq5, vendor: v5, quotation: q5a, lineItems: [{ item: 'Nitrile Gloves (Bulk)', qty: 100, unitPrice: 380, total: 38000 }, { item: 'Sanitizer 5L Cans', qty: 50, unitPrice: 420, total: 21000 }], subtotal: 59000, grandTotal: 69620, daysIssuedAgo: 20, poStatus: 'issued', invoiceStatus: 'pending_payment' });
+  // ── Jun 2026: Office (just issued this month) ─────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0009', invoiceNumber: 'INV-2026-0009', rfq: rfq3, vendor: v1, quotation: q3a, lineItems: [{ item: 'Standing Desks (Electric)', qty: 20, unitPrice: 22000, total: 440000 }], subtotal: 440000, grandTotal: 519200, daysIssuedAgo: 8, poStatus: 'issued', invoiceStatus: 'pending_payment' });
+  // ── Jun 2026: Logistics (issued, not delivered yet) ───────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0010', invoiceNumber: 'INV-2026-0010', rfq: rfq2, vendor: v2, quotation: q2a, lineItems: [{ item: 'Intercity Freight — June', qty: 10, unitPrice: 9500, total: 95000 }], subtotal: 95000, grandTotal: 112100, daysIssuedAgo: 3, poStatus: 'issued', invoiceStatus: 'pending_payment' });
+  // ── Cancelled PO ──────────────────────────────────────────────────────────
+  await makeHistory({ poNumber: 'PO-2026-0011', invoiceNumber: 'INV-2026-0011', rfq: rfq7, vendor: v3, quotation: q3b, lineItems: [{ item: 'Commercial Refrigerators', qty: 3, unitPrice: 45000, total: 135000 }], subtotal: 135000, grandTotal: 159300, daysIssuedAgo: 40, poStatus: 'cancelled', invoiceStatus: 'pending_payment' });
+
+  // Update vendor stats
+  v1.totalOrders = 8; v1.totalSpend = 1250000; await v1.save();
+  v2.totalOrders = 5; v2.totalSpend = 620000; await v2.save();
+  v3.totalOrders = 3; v3.totalSpend = 310000; await v3.save();
+  v5.totalOrders = 4; v5.totalSpend = 480000; await v5.save();
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 6. ACTIVITY LOGS
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('📝 Creating activity logs...');
+  const logs = [
+    { action: 'USER_REGISTERED', entity: 'user', entityId: admin._id, entityTitle: 'System Admin', performedBy: admin._id },
+    { action: 'VENDOR_CREATED', entity: 'vendor', entityId: v1._id, entityTitle: 'Acme Supplies Pvt Ltd', performedBy: admin._id },
+    { action: 'VENDOR_CREATED', entity: 'vendor', entityId: v2._id, entityTitle: 'Globex Logistics Corp', performedBy: admin._id },
+    { action: 'RFQ_CREATED', entity: 'rfq', entityId: rfq1._id, entityTitle: 'Annual IT Laptops Procurement', performedBy: officer._id },
+    { action: 'RFQ_PUBLISHED', entity: 'rfq', entityId: rfq1._id, entityTitle: 'Annual IT Laptops Procurement', performedBy: officer._id },
+    { action: 'QUOTATION_SUBMITTED', entity: 'quotation', entityId: q1a._id, entityTitle: 'Bid by Acme for RFQ-0001', performedBy: vUser1._id },
+    { action: 'QUOTATION_SUBMITTED', entity: 'quotation', entityId: q1b._id, entityTitle: 'Bid by Stark for RFQ-0001', performedBy: vUser5._id },
+    { action: 'QUOTATION_SELECTED', entity: 'quotation', entityId: q3a._id, entityTitle: 'Acme Selected for RFQ-0003', performedBy: officer._id },
+    { action: 'APPROVAL_STEP_L1_APPROVED', entity: 'approval', entityId: appB._id, entityTitle: 'L1 Approved — Medical PPE', performedBy: manager._id },
   ];
+  await ActivityLog.insertMany(logs);
 
-  const gstOptions = [12, 18, 28];
-  const deliveryOptions = [15, 21, 30, 45];
-  const paymentTermsOptions = ['Net 30', 'Net 45', 'Net 60', 'Advance 50%'];
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('\n\n╔══════════════════════════════════════════════════════╗');
+  console.log('║         ✅  RICH SEED COMPLETED SUCCESSFULLY!        ║');
+  console.log('╠══════════════════════════════════════════════════════╣');
+  console.log('║  USERS (Password: TestPass123 for all)               ║');
+  console.log('║  Admin    → test_admin@vendorbridge.com              ║');
+  console.log('║  Manager  → test_manager@vendorbridge.com            ║');
+  console.log('║  Officer  → test_officer@vendorbridge.com            ║');
+  console.log('║  Vendor 1 → test_vendor1@vendorbridge.com (Acme)     ║');
+  console.log('║  Vendor 2 → test_vendor2@vendorbridge.com (Globex)   ║');
+  console.log('║  Vendor 3 → test_vendor3@vendorbridge.com (Initech)  ║');
+  console.log('║  Vendor 4 → test_vendor4@vendorbridge.com (Umbrella) ║');
+  console.log('║  Vendor 5 → test_vendor5@vendorbridge.com (Stark)    ║');
+  console.log('╠══════════════════════════════════════════════════════╣');
+  console.log('║  DATA CREATED                                        ║');
+  console.log('║  Vendors  : 5 (3 active, 1 pending, 1 blocked)       ║');
+  console.log('║  RFQs     : 8 (draft/published/closed/cancelled)     ║');
+  console.log('║  Quotes   : 9 (submitted/selected/rejected)          ║');
+  console.log('║  Approvals: 2 (pending, l1_approved)                 ║');
+  console.log('║  POs      : 11 (issued/delivered/cancelled)           ║');
+  console.log('║  Invoices : 11 (paid/pending/overdue/cancelled)      ║');
+  console.log('║  Trend    : Jan–Jun 2026 monthly spend data          ║');
+  console.log('║  Categories: IT, Logistics, Office, Medical, Civil   ║');
+  console.log('╚══════════════════════════════════════════════════════╝\n');
 
-  let quotationCount = 0;
+  mongoose.connection.close();
+};
 
-  for (let i = 0; i < rfqs.length; i++) {
-    const rfq = rfqs[i];
-    if (rfq.status === 'DRAFT') continue; // No quotes for drafts
-
-    const assignedVendorIds = rfq.assignedVendors.map(v => v.id);
-    const itemsTemplate = quotationItems[i] || quotationItems[0];
-
-    // Each assigned vendor submits a quote (minus one for realism)
-    const submittingVendors = assignedVendorIds.slice(0, Math.min(assignedVendorIds.length, 3));
-
-    for (let j = 0; j < submittingVendors.length; j++) {
-      const vendorId = submittingVendors[j];
-      const gstPct = gstOptions[j % gstOptions.length];
-      // Vary pricing
-      const multiplier = 0.85 + (j * 0.1) + (Math.random() * 0.1);
-      const lineItems = itemsTemplate.map(li => ({
-        item: li.item,
-        unitPrice: Math.round(li.unitPrice * multiplier),
-        total: Math.round(li.total * multiplier),
-      }));
-      const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
-      const grandTotal = Math.round(subtotal + (subtotal * gstPct / 100));
-      const deliveryDays = deliveryOptions[j % deliveryOptions.length];
-      const paymentTerms = paymentTermsOptions[j % paymentTermsOptions.length];
-
-      const status = (rfq.status === 'CLOSED' && j === 0) ? 'SELECTED' : (rfq.status === 'CLOSED' ? 'REJECTED' : 'SUBMITTED');
-
-      const quotation = await prisma.quotation.create({
-        data: {
-          rfqId: rfq.id,
-          vendorId,
-          subtotal,
-          gstPercentage: gstPct,
-          grandTotal,
-          deliveryDays,
-          paymentTerms,
-          status,
-          quotationLineItems: { create: lineItems },
-        },
-      });
-      quotationCount++;
-
-      const logAction = status === 'SELECTED' ? 'APPROVED_QUOTATION' : 'SUBMITTED_QUOTATION';
-      const logDate = new Date();
-      logDate.setDate(logDate.getDate() - 30 + i);
-      await prisma.activityLog.create({
-        data: {
-          action: logAction,
-          performedById: vendorUsers.find(u => u.vendorId === vendorId)?.id || vendorUsers[0].id,
-          entityType: 'Quotation',
-          entityId: quotation.id,
-          createdAt: logDate,
-        },
-      });
-
-      // If this RFQ is CLOSED, the selected quote generates a PO
-      if (status === 'SELECTED') {
-        const poNumber = `PO-${String(100000 + i).slice(-6)}-${j}`;
-        const poDate = new Date();
-        poDate.setDate(poDate.getDate() - 25 + i);
-
-        const po = await prisma.purchaseOrder.create({
-          data: {
-            poNumber,
-            rfqId: rfq.id,
-            vendorId,
-            quotationId: quotation.id,
-            poDate,
-            totalAmount: grandTotal,
-            status: j === 0 ? 'SENT' : 'FULFILLED',
-          },
-        });
-
-        // Generate invoice for POs
-        if (j === 0) {
-          const cgst = Math.round(subtotal * (gstPct / 2 / 100));
-          const sgst = Math.round(subtotal * (gstPct / 2 / 100));
-          const issueDate = new Date(poDate);
-          issueDate.setDate(issueDate.getDate() + 2);
-          const dueDate = new Date(issueDate);
-          dueDate.setDate(dueDate.getDate() + 30);
-
-          await prisma.invoice.create({
-            data: {
-              invoiceNumber: `INV-2025-${String(1000 + i).slice(-4)}`,
-              poId: po.id,
-              vendorId,
-              issueDate,
-              dueDate,
-              cgst,
-              sgst,
-              grandTotal,
-              status: i % 3 === 0 ? 'PAID' : 'PENDING_PAYMENT',
-            },
-          });
-        }
-
-        // Close the RFQ
-        await prisma.rFQ.update({
-          where: { id: rfq.id },
-          data: { status: 'CLOSED' },
-        });
-
-        await prisma.activityLog.create({
-          data: {
-            action: 'GENERATED_PO',
-            performedById: procurementOfficer.id,
-            entityType: 'PurchaseOrder',
-            entityId: po.id,
-            createdAt: poDate,
-          },
-        });
-      }
-    }
-  }
-  console.log(`  ✅ Created ${quotationCount} quotations`);
-
-  // ── 5. Log some generic activities ──────────────────────────────────
-  await prisma.activityLog.create({
-    data: { action: 'REGISTERED_VENDOR', performedById: admin.id, entityType: 'Vendor', entityId: vendors[0].id },
-  });
-  await prisma.activityLog.create({
-    data: { action: 'REGISTERED_VENDOR', performedById: admin.id, entityType: 'Vendor', entityId: vendors[1].id },
-  });
-
-  console.log('  ✅ Created activity logs');
-  console.log('');
-  console.log('🎉 Seeding complete!');
-  console.log('');
-  console.log('📋 Login Credentials:');
-  console.log('   Admin:               admin@vendorbridge.com / password123');
-  console.log('   Manager:             manager@vendorbridge.com / password123');
-  console.log('   Procurement Officer: procurement@vendorbridge.com / password123');
-  console.log('   Vendor Reps:         vendor1@vendorbridge.com ... vendor5@vendorbridge.com / password123');
-}
-
-main()
-  .catch((e) => {
-    console.error('❌ Seeding failed:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+seed().catch((err) => {
+  console.error('❌ Seed failed:', err);
+  mongoose.connection.close();
+});
