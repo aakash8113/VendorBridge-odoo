@@ -1,0 +1,21 @@
+import { Outlet, Link } from 'react-router-dom';
+import { Sidebar } from './Sidebar';
+import { User } from 'lucide-react';
+
+export function Layout() {
+  return (
+    <div className="min-h-screen bg-[#121212]">
+      <Sidebar />
+      <div className="pl-64 flex flex-col min-h-screen">
+        <header className="h-20 px-8 flex items-center justify-end">
+          <Link to="/login" title="Logout" className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors border border-zinc-700 flex items-center justify-center text-gray-400">
+            <User className="w-5 h-5" />
+          </Link>
+        </header>
+        <main className="flex-1 px-8 pb-8">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
