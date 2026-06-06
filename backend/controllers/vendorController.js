@@ -1,5 +1,16 @@
 const prisma = require('../prismaClient');
 
+// Helper function to log activities
+const logActivity = async (action, userId, entityType, entityId) => {
+  try {
+    await prisma.activityLog.create({
+      data: { action, performedById: userId, entityType, entityId },
+    });
+  } catch (error) {
+    console.error('Failed to insert ActivityLog:', error);
+  }
+};
+
 // @desc    Get all vendors (with optional search)
 // @route   GET /api/vendors
 // @access  Private (Admin, Manager, Procurement Officer)
@@ -64,6 +75,10 @@ exports.createVendor = async (req, res) => {
         status: status || 'PENDING',
       },
     });
+
+    if (req.user && req.user.id) {
+      await logActivity('REGISTERED_VENDOR', req.user.id, 'Vendor', newVendor.id);
+    }
 
     res.status(201).json(newVendor);
   } catch (error) {

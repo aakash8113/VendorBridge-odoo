@@ -1,5 +1,9 @@
 const express = require('express');
-const { generateInvoice, generateInvoicePdf, sendInvoiceEmailRoute } = require('../controllers/documentController');
+const { 
+  generateInvoice, 
+  generateInvoicePdf, 
+  sendInvoiceEmailRoute 
+} = require('../controllers/documentController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();

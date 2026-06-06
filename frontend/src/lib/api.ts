@@ -1,47 +1,60 @@
-import { NavigateFunction } from 'react-router-dom';
+import { NavigateFunction } from "react-router-dom";
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = "/api";
 
 export const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 export const apiFetch = async (url: string, options: RequestInit = {}) => {
-    const headers = {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...options.headers,
-    };
+  const headers = {
+    "Content-Type": "application/json",
+    ...getAuthHeaders(),
+    ...options.headers,
+  };
 
-    const res = await fetch(`${API_BASE_URL}${url}`, {
-        ...options,
-        headers,
-    });
+  const res = await fetch(`${API_BASE_URL}${url}`, {
+    ...options,
+    headers,
+  });
 
-    if (res.status === 401) {
-        // Handle unauthorized (clear token)
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-    }
+  if (res.status === 401) {
+    // Handle unauthorized (clear token)
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  }
 
-    if (!res.ok) {
-        let errStr = res.statusText;
-        try {
-            const errBody = await res.json();
-            errStr = errBody.error || errStr;
-        } catch(e) {}
-        throw new Error(errStr);
-    }
+  if (!res.ok) {
+    let errStr = res.statusText;
+    try {
+      const errBody = await res.json();
+      errStr = errBody.error || errStr;
+    } catch (e) {}
+    throw new Error(errStr);
+  }
 
-    // PDF download special case
-    if (res.headers.get('Content-Type')?.includes('application/pdf')) {
-        return res.blob();
-    }
+  // PDF download special case
+  if (res.headers.get("Content-Type")?.includes("application/pdf")) {
+    return res.blob();
+  }
 
-    // Attempt to return JSON, otherwise text if empty
-    const text = await res.text();
-    if (!text) return null;
-    return JSON.parse(text);
+  // Attempt to return JSON, otherwise text if empty
+  const text = await res.text();
+  if (!text) return null;
+  return JSON.parse(text);
+};
+
+// Create a new RFQ (handles standard JSON payload or you can modify for FormData if attachments needed)
+export const createRfqRequest = async (rfqData: any) => {
+  return await apiFetch("/rfqs", {
+    method: "POST",
+    body: JSON.stringify(rfqData),
+  });
+};
+
+// Fetch Vendors to assign
+export const fetchVendorsRequest = async () => {
+  return await apiFetch("/vendors");
 };

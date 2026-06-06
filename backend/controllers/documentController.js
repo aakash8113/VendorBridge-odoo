@@ -13,6 +13,8 @@ const logActivity = async (action, userId, entityType, entityId) => {
   }
 };
 
+const generateInvoiceNumber = () => `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`;
+
 // @desc    Generate an Invoice from a PO
 // @route   POST /api/invoices/generate/:poId
 // @access  Private (Admin, Manager, Procurement Officer)
@@ -40,9 +42,6 @@ exports.generateInvoice = async (req, res) => {
     const cgst = subtotal * splitGstPercentage;
     const sgst = subtotal * splitGstPercentage;
 
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${randomSuffix}`;
-    
     const issueDate = new Date();
     // Setting simple 30 day Payment Terms
     const dueDate = new Date();
@@ -50,7 +49,7 @@ exports.generateInvoice = async (req, res) => {
 
     const newInvoice = await prisma.invoice.create({
       data: {
-        invoiceNumber,
+        invoiceNumber: generateInvoiceNumber(),
         poId,
         vendorId: po.vendorId,
         issueDate,
@@ -60,6 +59,12 @@ exports.generateInvoice = async (req, res) => {
         grandTotal: po.totalAmount, // grandTotal from the PO/Quote
         status: 'PENDING_PAYMENT'
       }
+    });
+
+    // Optionally update PO Status
+    await prisma.purchaseOrder.update({
+      where: { id: poId },
+      data: { status: 'SENT' } 
     });
 
     await logActivity('GENERATED_INVOICE', req.user.id, 'Invoice', newInvoice.id);
@@ -74,7 +79,7 @@ exports.generateInvoice = async (req, res) => {
 
 // @desc    Generate PDF dynamically for an Invoice
 // @route   GET /api/documents/pdf/:invoiceId
-// @access  Private (Admin, Manager, PR, Vendor)
+// @access  Private (Admin, Manager, Procurement Officer, Vendor)
 exports.generateInvoicePdf = async (req, res) => {
   try {
     const { invoiceId } = req.params;

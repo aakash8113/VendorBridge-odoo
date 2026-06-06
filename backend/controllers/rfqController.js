@@ -90,7 +90,7 @@ exports.getRfqs = async (req, res) => {
     // If the user is a VENDOR, they can only see RFQs they are assigned to
     if (req.user.role === 'VENDOR') {
       if (!req.user.vendorId) {
-         return res.status(403).json({ error: 'Vendor profile not linked to user account.' });
+        return res.status(403).json({ error: 'Vendor profile not linked to user account.' });
       }
       whereClause = {
         assignedVendors: {

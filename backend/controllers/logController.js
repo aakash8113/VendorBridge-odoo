@@ -11,7 +11,11 @@ exports.getLogs = async (req, res) => {
 
     // Apply optional filters dynamically based on query params
     if (entityType) {
-      whereClause.entityType = entityType;
+      if (entityType.includes(',')) {
+        whereClause.entityType = { in: entityType.split(',') };
+      } else {
+        whereClause.entityType = entityType;
+      }
     }
     if (action) {
       whereClause.action = action;

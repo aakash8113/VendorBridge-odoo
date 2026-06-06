@@ -37,3 +37,20 @@ exports.sendInvoiceEmail = async (vendorEmail, invoicePdfBuffer, invoiceNumber) 
     throw error;
   }
 };
+
+
+const sendInvoiceEmail = async (vendorEmail, invoicePdfBuffer) => {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail', // or your SMTP provider
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  });
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to: vendorEmail,
+    subject: 'VendorBridge: Your Invoice',
+    text: 'Please find the attached invoice generated via VendorBridge.',
+    attachments: [{ filename: 'invoice.pdf', content: invoicePdfBuffer }]
+  });
+};
+module.exports = { sendInvoiceEmail };

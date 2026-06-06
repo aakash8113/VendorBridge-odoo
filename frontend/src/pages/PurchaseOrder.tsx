@@ -1,121 +1,237 @@
-import { Download, Printer, Mail } from 'lucide-react';
+import { Download, Printer, Mail, Inbox } from "lucide-react";
+import { useState, useEffect } from "react";
+import { apiFetch } from "../lib/api";
 
 export function PurchaseOrder() {
+  const [pos, setPos] = useState<any[]>([]);
+  const [selectedPo, setSelectedPo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchPOs() {
+      try {
+        const data = await apiFetch("/pos");
+        setPos(data);
+        if (data.length > 0) setSelectedPo(data[0]);
+      } catch (err) {
+        console.error("Failed to load POs", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPOs();
+  }, []);
+
+  if (loading)
+    return <div className="text-gray-400">Loading Purchase Orders...</div>;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold text-gray-100">Purchase Order & Invoice</h1>
-          <p className="text-sm text-gray-400 mt-1">PO-2024-auto-generated after approval</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
-             <Download className="w-4 h-4" /> Download PDF
-          </button>
-          <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
-             <Printer className="w-4 h-4" /> Print
-          </button>
-          <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
-             <Mail className="w-4 h-4" /> Email invoice
-          </button>
-        </div>
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto flex flex-col md:flex-row gap-8">
+      {/* Left Sidebar: List of POs */}
+      <div className="w-full md:w-1/3 bg-[#1E1E1E] border border-zinc-800 rounded-lg p-4 h-[calc(100vh-8rem)] overflow-y-auto hidden-scrollbar">
+        <h2 className="text-lg font-semibold text-gray-100 mb-4 px-2">
+          Purchase Orders
+        </h2>
+        {pos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
+            <Inbox className="w-12 h-12 mb-2 opacity-50" />
+            <p>No Purchase Orders generated yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {pos.map((po) => (
+              <button
+                key={po.id}
+                onClick={() => setSelectedPo(po)}
+                className={`w-full text-left p-4 rounded-lg border transition-all ${
+                  selectedPo?.id === po.id
+                    ? "bg-blue-600/10 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
+                    : "bg-black/20 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-sm font-semibold text-gray-200">
+                    {po.poNumber}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] ${po.status === "GENERATED" ? "bg-blue-900/30 text-blue-400" : "bg-emerald-900/30 text-emerald-400"}`}
+                  >
+                    {po.status}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-400 truncate">
+                  {po.vendor?.companyName}
+                </div>
+                <div className="text-sm font-semibold text-emerald-400 mt-2">
+                  ₹
+                  {po.totalAmount.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="bg-[#1E1E1E] border border-zinc-800 rounded-lg p-8 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
-          <div className="space-y-4">
-            <div>
-              <p className="text-zinc-500 mb-1">Bill to:</p>
-              <div className="text-gray-300 space-y-1">
-                <p className="text-gray-100 font-medium">your Organization Name</p>
-                <p>123 business park, ahmedabad</p>
-                <p>GSTIN:253834384FB</p>
+      {/* Right Content: Selected PO Document */}
+      <div className="flex-1 w-full relative">
+        {!selectedPo ? (
+          <div className="flex items-center justify-center h-full text-zinc-500">
+            Select a Purchase Order from the list to view
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-semibold text-gray-100">
+                  Invoice / PO
+                </h1>
+                <p className="text-sm text-gray-400 mt-1">
+                  {selectedPo.poNumber} - ({selectedPo.status})
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
+                  <Download className="w-4 h-4" /> PDF
+                </button>
+                <button className="flex justify-center items-center gap-2 px-4 py-2 border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-gray-300 rounded-lg transition-colors text-sm">
+                  <Mail className="w-4 h-4" /> Email
+                </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-gray-300 pt-4">
-              <div>
-                <p className="text-zinc-500 mb-1">PO Number:</p>
-                <p>PO-2025-0068</p>
+
+            <div className="bg-[#1E1E1E] border border-zinc-800 rounded-lg p-8 space-y-8 print:bg-white print:text-black">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-zinc-500 mb-1">Bill to:</p>
+                    <div className="text-gray-300 space-y-1">
+                      <p className="text-gray-100 font-medium">
+                        VendorBridge Organization
+                      </p>
+                      <p>Corporate HQ, Mumbai</p>
+                      <p>GSTIN: 27AADCB2230M1Z2</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-gray-300 pt-4">
+                    <div>
+                      <p className="text-zinc-500 mb-1">PO Number:</p>
+                      <p className="font-medium text-gray-200">
+                        {selectedPo.poNumber}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500 mb-1">PO Date:</p>
+                      <p>{new Date(selectedPo.poDate).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-zinc-500 mb-1">Vendor / Supplier:</p>
+                    <div className="text-gray-300 space-y-1">
+                      <p className="text-gray-100 font-medium">
+                        {selectedPo.vendor?.companyName}
+                      </p>
+                      <p>{selectedPo.vendor?.address}</p>
+                      <p>GSTIN: {selectedPo.vendor?.gstNumber}</p>
+                    </div>
+                  </div>
+                  <div className="pt-4">
+                    <p className="text-zinc-500 mb-1">Reference RFQ:</p>
+                    <p className="text-gray-300">{selectedPo.rfq?.title}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-zinc-500 mb-1">PO date:</p>
-                <p>21 may, 2025</p>
+
+              {/* Line Items Table */}
+              <div className="mt-8 border border-zinc-800 rounded-lg overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-zinc-800/50 text-gray-400 border-b border-zinc-800">
+                    <tr>
+                      <th className="px-6 py-3 font-medium">Description</th>
+                      <th className="px-6 py-3 font-medium text-right">Qty</th>
+                      <th className="px-6 py-3 font-medium text-right">
+                        Unit Price
+                      </th>
+                      <th className="px-6 py-3 font-medium text-right">
+                        Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800 text-gray-300">
+                    {selectedPo.quotation?.quotationLineItems?.map(
+                      (item: any, idx: number) => (
+                        <tr key={idx}>
+                          <td className="px-6 py-4">{item.item}</td>
+                          <td className="px-6 py-4 text-right">
+                            {item.quantity}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            ₹
+                            {item.unitPrice.toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            ₹
+                            {item.total.toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals */}
+              <div className="flex justify-end pt-6">
+                <div className="w-full max-w-sm space-y-3 text-sm">
+                  <div className="flex justify-between text-gray-400">
+                    <span>Subtotal:</span>
+                    <span>
+                      ₹
+                      {selectedPo.quotation?.subtotal.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-gray-400">
+                    <span>GST ({selectedPo.quotation?.gstPercentage}%):</span>
+                    <span>
+                      ₹
+                      {(
+                        selectedPo.totalAmount - selectedPo.quotation?.subtotal
+                      ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-lg font-semibold text-gray-100 pt-3 border-t border-zinc-800">
+                    <span>Grand Total:</span>
+                    <span className="text-emerald-400">
+                      ₹
+                      {selectedPo.totalAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                  <div className="pt-4 flex justify-between text-xs text-gray-500">
+                    <span>
+                      Payment Terms: Net {selectedPo.quotation?.paymentTerms}
+                    </span>
+                    <span>
+                      Delivery: {selectedPo.quotation?.deliveryDays} Days
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-
-          <div className="space-y-4">
-             <div>
-              <p className="text-zinc-500 mb-1">Vendor</p>
-              <div className="text-gray-300 space-y-1">
-                <p className="text-gray-100 font-medium">Infra supplies pvt ltd</p>
-                <p>456, industrial estate, surat</p>
-                <p>GSTIN: 343434DB4523</p>
-              </div>
-            </div>
-             <div className="grid grid-cols-2 gap-4 text-gray-300 pt-4">
-              <div>
-                <p className="text-zinc-500 mb-1">invoice date:</p>
-                <p>22 may 2025</p>
-              </div>
-              <div>
-                <p className="text-zinc-500 mb-1">Due date:</p>
-                <p>21 june 2025</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-[#121212] flex w-full">
-              <tr className="flex w-full text-gray-400 border-b border-zinc-800">
-                <th className="p-4 font-medium w-1/4">Item</th>
-                <th className="p-4 font-medium w-1/4 text-center">Qty</th>
-                <th className="p-4 font-medium w-1/4 text-right">Unit price</th>
-                <th className="p-4 font-medium w-1/4 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="bg-[#1E1E1E] flex flex-col items-center justify-between w-full divide-y divide-zinc-800 text-gray-300">
-              <tr className="flex w-full">
-                <td className="p-4 w-1/4">Ergonomic chair</td>
-                <td className="p-4 w-1/4 text-center">25</td>
-                <td className="p-4 w-1/4 text-right">3500</td>
-                <td className="p-4 w-1/4 text-right">87,500</td>
-              </tr>
-              <tr className="flex w-full border-b border-zinc-800">
-                <td className="p-4 w-1/4">Tech Core LTD</td>
-                <td className="p-4 w-1/4 text-center">10</td>
-                <td className="p-4 w-1/4 text-right">8,200</td>
-                <td className="p-4 w-1/4 text-right">82000</td>
-              </tr>
-            </tbody>
-            {/* Totals Section */}
-            <tbody className="bg-[#121212] flex flex-col w-full text-gray-300 border-t border-zinc-800">
-              <tr className="flex w-full justify-end border-b border-zinc-800/50">
-                <td className="p-3 w-1/4 text-right text-zinc-500">Subtotal</td>
-                <td className="p-3 w-1/4 text-right">1,69,500</td>
-              </tr>
-              <tr className="flex w-full justify-end border-b border-zinc-800/50">
-                <td className="p-3 w-1/4 text-right text-zinc-500">CGST(9%)</td>
-                <td className="p-3 w-1/4 text-right">15,255</td>
-              </tr>
-              <tr className="flex w-full justify-end border-b border-zinc-800/50">
-                <td className="p-3 w-1/4 text-right text-zinc-500">SGST(9%)</td>
-                <td className="p-3 w-1/4 text-right">15,255</td>
-              </tr>
-              <tr className="flex w-full justify-end text-white font-semibold">
-                <td className="p-4 w-1/4 text-right">Grand total</td>
-                <td className="p-4 w-1/4 text-right text-lg">2,00,010</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 text-sm mt-4 px-2">
-        <span className="text-zinc-500">status: <span className="text-amber-500 font-medium px-2 py-1 bg-amber-500/10 rounded">Pending Payment</span></span>
-        <button className="text-blue-500 hover:text-blue-400 font-medium hover:underline transition-all">Mark as Paid</button>
+        )}
       </div>
     </div>
   );
